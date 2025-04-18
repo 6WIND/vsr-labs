@@ -1,0 +1,5 @@
+initiators=20
+delay=25
+init_limit=1000
+proposal=aes256gcm-prfsha384-ecp384
+esp=aes256gcm-ecp384

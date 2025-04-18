@@ -1,0 +1,25 @@
+automation:
+  vars:
+    serial: "{{ lookup('file', '../../license') }}"
+    ssh_key: "{{ lookup('file', '~/.ssh/id_rsa.pub') }}"
+    influxdb_url: http://clab-6wind-mobile-segw-monitoring:8086
+    mtu: 2048
+    vrrp_ip_suffix: 10
+    ipsec_tunnel_endpoint: 55.55.55.1
+    vrfs:
+      - vrf1:
+        id: 1
+        pool: 7.100.0.0/18
+      - vrf2:
+        id: 2
+        pool: 7.100.64.0/18
+  hosts:
+    clab-6wind-mobile-segw-segw-north-a1:
+      id: 1
+      ip_suffix: 110
+    clab-6wind-mobile-segw-segw-north-a2:
+      id: 2
+      ip_suffix: 120
+    clab-6wind-mobile-segw-segw-north-b1:
+      id: 15
+      ip_suffix: 200

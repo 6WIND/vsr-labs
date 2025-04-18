@@ -1,0 +1,3 @@
+automation:
+  vars:
+    ansible_user: root

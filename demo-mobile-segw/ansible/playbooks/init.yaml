@@ -1,0 +1,11 @@
+- hosts: clab-6wind-mobile-segw-segw-north-a1,clab-6wind-mobile-segw-segw-north-b1
+  gather_facts: false  # facts gathering is not supported at the moment
+  tasks:
+    - import_tasks: apply-config.yaml
+      vars:
+        state: "2"
+
+- hosts: clab-6wind-mobile-segw-segw-north-a2
+  gather_facts: false  # facts gathering is not supported at the moment
+  tasks:
+    - include_tasks: delete-config.yaml

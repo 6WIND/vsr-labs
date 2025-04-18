@@ -1,0 +1,44 @@
+- name: Apply 2->3 on SeGW-backup
+  hosts: clab-6wind-mobile-segw-segw-north-b1 
+  tasks:
+    - import_tasks: apply-config.yaml
+      vars:
+        state: "2->3"
+
+- name: Apply 2->3 on SeGW-1
+  hosts: clab-6wind-mobile-segw-segw-north-a1
+  tasks:
+    - import_tasks: apply-config.yaml
+      vars:
+        state: "2->3"
+
+- name: Apply 2->3 on SeGW-2
+  hosts: clab-6wind-mobile-segw-segw-north-a2
+  tasks:
+    - import_tasks: apply-config.yaml
+      vars:
+        state: "2->3"
+
+- name: Apply 3 on SeGW-1
+  hosts: clab-6wind-mobile-segw-segw-north-a1
+  tasks:
+    - name: Sleep for 10 seconds to sync tunnels
+      ansible.builtin.wait_for:
+        timeout: 10
+    - import_tasks: apply-config.yaml
+      vars:
+        state: "3"
+
+- name: Apply 3 on SeGW-2
+  hosts: clab-6wind-mobile-segw-segw-north-a2
+  tasks:
+    - import_tasks: apply-config.yaml
+      vars:
+        state: "3"
+
+- name: Apply 3 on SeGW-backup
+  hosts: clab-6wind-mobile-segw-segw-north-b1
+  tasks:
+    - import_tasks: apply-config.yaml
+      vars:
+        state: "3"

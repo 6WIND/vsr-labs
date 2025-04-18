@@ -1,0 +1,28 @@
+- name: create /tmp/ansible if needed
+  file:
+    path: /tmp/ansible
+    mode: 0755
+    state: directory
+
+- name: send readiness probe
+  template:
+    src: templates/ready-probe.sh
+    dest: /tmp/ansible/ready-probe.sh
+    mode: 0755
+
+- name: generate config
+  template:
+    src: templates/empty.nc-cli.j2
+    dest: /tmp/ansible/config.nc-cli
+    force: true
+
+- name: apply config
+  shell:
+    "nc-cli -f /tmp/ansible/config.nc-cli -n"
+
+- name: retry probe until ready
+  ansible.builtin.shell: /tmp/ansible/ready-probe.sh
+  register: result
+  until: result.rc == 0
+  retries: 15
+  delay: 10

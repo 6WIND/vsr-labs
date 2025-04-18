@@ -1,0 +1,4 @@
+- hosts: clab-6wind-mobile-segw-segw-north-a1,clab-6wind-mobile-segw-segw-north-a2,clab-6wind-mobile-segw-segw-north-b1
+  gather_facts: false  # facts gathering is not supported at the moment
+  tasks:
+    - import_tasks: get-certificates.yaml

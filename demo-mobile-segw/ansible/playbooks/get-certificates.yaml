@@ -1,0 +1,15 @@
+- name: create /tmp/ansible if needed
+  file:
+    path: /tmp/ansible
+    mode: 0755
+    state: directory
+
+- name: generate config
+  template:
+    src: templates/certificates.nc-cli.j2
+    dest: /tmp/ansible/certificates.nc-cli
+    force: true
+
+- name: apply config
+  shell:
+    "nc-cli -f /tmp/ansible/certificates.nc-cli -n"

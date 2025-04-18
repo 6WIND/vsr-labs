@@ -1,0 +1,53 @@
+automation:
+  vars:
+    switches:
+      switch1:
+        name: cgw-1
+      switch2:
+        name: cgw-2
+  hosts:
+    clab-6wind-mobile-segw-segw-north-a1:
+      hostname: segw-north-a1
+      ports:
+       - name: clustergw-1-p1
+         switch: switch1
+         portid: infra-eth1
+       - name: clustergw-1-p2
+         switch: switch1
+         portid: infra-eth2
+       - name: clustergw-2-p1
+         switch: switch2
+         portid: infra-eth3
+       - name: clustergw-2-p2
+         switch: switch2
+         portid: infra-eth4
+    clab-6wind-mobile-segw-segw-north-a2:
+      hostname: segw-north-a2
+      ports:
+       - name: clustergw-1-p1
+         switch: switch1
+         portid: infra-eth1
+       - name: clustergw-1-p2
+         switch: switch1
+         portid: infra-eth2
+       - name: clustergw-2-p1
+         switch: switch2
+         portid: infra-eth3
+       - name: clustergw-2-p2
+         switch: switch2
+         portid: infra-eth4
+    clab-6wind-mobile-segw-segw-north-b1:
+      hostname: segw-north-b1
+      ports:
+       - name: clustergw-1-p1
+         switch: switch1
+         portid: infra-eth1
+       - name: clustergw-1-p2
+         switch: switch1
+         portid: infra-eth2
+       - name: clustergw-2-p1
+         switch: switch2
+         portid: infra-eth3
+       - name: clustergw-2-p2
+         switch: switch2
+         portid: infra-eth4

@@ -1,0 +1,27 @@
+cliconfig
+auto-validation false
+save force
+exit
+netconf connect
+
+edit running
+
+/ pki
+/ pki ca-profile 6WIND_CA
+/ pki ca-profile 6WIND_CA cmp
+/ pki ca-profile 6WIND_CA cmp url http://clab-6wind-mobile-segw-pki:8080/ejbca/publicweb/cmp/client
+/ pki ca-profile 6WIND_CA cmp server-certificate CMP-6WIND
+/ pki revocation
+/ pki revocation crl
+
+commit
+
+cmd certificate import name CMP-6WIND url "http://clab-6wind-mobile-segw-pki:8080/ejbca/publicweb/webdist/certdist?cmd=cacert&level=0&issuer=CN%3D6WIND_CA%2CO%3D6WIND%2CC%3DFR"
+cmd certificate cmp enroll name segw ca-profile 6WIND_CA secret segw subject /CN={{ hostname }}/O=6WIND/C=FR
+
+exit
+
+cliconfig
+auto-validation true
+save force
+exit

@@ -1,0 +1,35 @@
+automation:
+  vars:
+    states:
+      '2':
+        vrfs:
+          1:
+            active: segw-north-a1
+            backup: segw-north-b1
+          2:
+            active: segw-north-a1
+            backup: segw-north-b1
+      '2->3':
+        vrfs:
+          1:
+            active: segw-north-a1
+            backup: segw-north-b1
+          2:
+            active: segw-north-a1
+            backup: segw-north-a2
+      '3':
+        vrfs:
+          1:
+            active: segw-north-a1
+            backup: segw-north-b1
+          2:
+            active: segw-north-a2
+            backup: segw-north-b1
+      '3->2':
+        vrfs:
+          1:
+            active: segw-north-a1
+            backup: segw-north-b1
+          2:
+            active: segw-north-a2
+            backup: segw-north-a1

@@ -1,0 +1,15 @@
+netconf connect
+edit running
+del /
+
+/ vrf main kpi telegraf metrics template all
+/ vrf main kpi telegraf influxdb-output url {{ influxdb_url }}
+/ vrf main kpi telegraf influxdb-output url {{ influxdb_url }} database telegraf
+/ vrf main netconf-server
+/ vrf main ssh-server
+
+/ system hostname {{ hostname }}
+/ system license online serial {{ serial }}
+
+commit
+exit

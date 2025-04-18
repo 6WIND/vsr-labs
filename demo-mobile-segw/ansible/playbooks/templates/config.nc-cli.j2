@@ -1,0 +1,293 @@
+cliconfig
+auto-validation false
+save force
+exit
+netconf connect
+
+edit running
+del /
+
+/ vrf main ssh-server
+/ vrf main kpi telegraf metrics template all
+/ vrf main kpi telegraf influxdb-output url {{ influxdb_url }} database telegraf
+
+{% for switch in switches.values() %}
+/ vrf data interface lag lag-{{ switch.name }} mtu {{ mtu }}
+/ vrf data interface lag lag-{{ switch.name }} mode lacp
+/ vrf data interface lag lag-{{ switch.name }} xmit-hash-policy layer3+4
+/ vrf data interface lag lag-{{ switch.name }} minimum-links 2
+/ vrf data interface lag lag-{{ switch.name }} lacp-rate fast
+/ vrf main kpi telegraf metrics monitored-interface vrf data name lag-{{ switch.name }}
+{% endfor %}
+
+{% for port in ports %}
+/ vrf data interface infrastructure {{ port.name }} mtu {{ mtu }}
+/ vrf data interface infrastructure {{ port.name }} port {{ port.portid }}
+/ vrf data interface lag lag-{{ switches[port.switch].name }} link-interface {{ port.name }}
+/ vrf main kpi telegraf metrics monitored-interface vrf data name {{ port.name }}
+{% endfor %}
+
+{% for vrf in vrfs %}
+{%- set is_active = states[state].vrfs[vrf.id].active == hostname %}
+{%- set is_backup = states[state].vrfs[vrf.id].backup == hostname %}
+{%- set active = 'clab-6wind-mobile-segw-' + states[state].vrfs[vrf.id].active %}
+{%- set backup = 'clab-6wind-mobile-segw-' + states[state].vrfs[vrf.id].backup %}
+{%- if is_active or is_backup %}
+/ vrf untrusted_{{ vrf.id }} ike pre-shared-key femto secret myStrongPSK
+/ vrf untrusted_{{ vrf.id }} ike global-options threads 40
+/ vrf untrusted_{{ vrf.id }} ike global-options sa-table-size 2048
+/ vrf untrusted_{{ vrf.id }} ike global-options sa-table-segments 128
+/ vrf untrusted_{{ vrf.id }} ike global-options sp-hash-ipv4 local 24
+/ vrf untrusted_{{ vrf.id }} ike ha listen-ha-group ha_ipsec_{{ vrf.id }}
+/ vrf untrusted_{{ vrf.id }} ike ha local-address 192.168.0.{{ ip_suffix }}
+{% if is_active %}
+/ vrf untrusted_{{ vrf.id }} ike ha remote-address 192.168.0.{{ hostvars[backup].ip_suffix }}
+{% else %}
+/ vrf untrusted_{{ vrf.id }} ike ha remote-address 192.168.0.{{ hostvars[active].ip_suffix }}
+{% endif %}
+/ vrf untrusted_{{ vrf.id }} ike ha pool mypool address {{ vrf.pool }}
+/ vrf untrusted_{{ vrf.id }} ike ike-policy-template nodeB ike-proposal 1 aead-alg aes256-gcm-128
+/ vrf untrusted_{{ vrf.id }} ike ike-policy-template nodeB ike-proposal 1 prf-alg hmac-sha384
+/ vrf untrusted_{{ vrf.id }} ike ike-policy-template nodeB ike-proposal 1 dh-group ecp384
+/ vrf untrusted_{{ vrf.id }} ike ike-policy-template nodeB ike-proposal 2 aead-alg aes128-gcm-128
+/ vrf untrusted_{{ vrf.id }} ike ike-policy-template nodeB ike-proposal 2 prf-alg hmac-sha256
+/ vrf untrusted_{{ vrf.id }} ike ike-policy-template nodeB ike-proposal 2 dh-group ecp256
+/ vrf untrusted_{{ vrf.id }} ike ike-policy-template nodeB local-auth-method certificate
+/ vrf untrusted_{{ vrf.id }} ike ike-policy-template nodeB remote-auth-method certificate
+/ vrf untrusted_{{ vrf.id }} ike ike-policy-template nodeB unique-sa replace
+/ vrf untrusted_{{ vrf.id }} ike ike-policy-template nodeB dpd-delay 10
+/ vrf untrusted_{{ vrf.id }} ike ipsec-policy-template nodeB esp-proposal 1 aead-alg aes256-gcm-128
+/ vrf untrusted_{{ vrf.id }} ike ipsec-policy-template nodeB esp-proposal 1 dh-group ecp384
+/ vrf untrusted_{{ vrf.id }} ike ipsec-policy-template nodeB esp-proposal 2 enc-alg aes256-cbc
+/ vrf untrusted_{{ vrf.id }} ike ipsec-policy-template nodeB esp-proposal 2 auth-alg hmac-sha256
+/ vrf untrusted_{{ vrf.id }} ike ipsec-policy-template nodeB start-action none
+/ vrf untrusted_{{ vrf.id }} ike ipsec-policy-template nodeB close-action none
+/ vrf untrusted_{{ vrf.id }} ike ipsec-policy-template nodeB dpd-action clear
+/ vrf untrusted_{{ vrf.id }} ike vpn loadtester ike-policy template nodeB
+/ vrf untrusted_{{ vrf.id }} ike vpn loadtester ipsec-policy template nodeB
+/ vrf untrusted_{{ vrf.id }} ike vpn loadtester local-address {{ ipsec_tunnel_endpoint }}
+/ vrf untrusted_{{ vrf.id }} ike vpn loadtester certificate segw
+/ vrf untrusted_{{ vrf.id }} ike vpn loadtester remote-ca-certificate 6WIND_CA
+/ vrf untrusted_{{ vrf.id }} ike vpn loadtester vip-pool mypool
+/ vrf untrusted_{{ vrf.id }} ike vpn loadtester security-policy loadtester local-ts subnet 77.77.77.0/24
+/ vrf untrusted_{{ vrf.id }} ike vpn loadtester security-policy loadtester svti-id-in {{ vrf.id }}
+/ vrf untrusted_{{ vrf.id }} ike vpn loadtester security-policy loadtester svti-id-out {{ vrf.id }}
+/ vrf untrusted_{{ vrf.id }} ike vpn loadtester security-policy loadtester inject-routes next-hop svti-trusted-{{ vrf.id }}
+/ vrf untrusted_{{ vrf.id }} ike vpn loadtester security-policy loadtester inject-routes next-hop-backup gre-trusted-{{ vrf.id }}
+/ vrf untrusted_{{ vrf.id }} ike vpn loadtester security-policy loadtester inject-routes vrf trusted
+/ vrf untrusted_{{ vrf.id }} interface vxlan sync_{{ vrf.id }} ipv4 address 192.168.0.{{ ip_suffix }}/24
+{% if is_active %}
+/ vrf untrusted_{{ vrf.id }} interface vxlan sync_{{ vrf.id }} ipv4 fdb link-layer-address 00:00:00:00:00:00 ip 10.10.{{ 10 * vrf.id }}.{{ hostvars[backup].ip_suffix }}
+{% else %}
+/ vrf untrusted_{{ vrf.id }} interface vxlan sync_{{ vrf.id }} ipv4 fdb link-layer-address 00:00:00:00:00:00 ip 10.10.{{ 10 * vrf.id }}.{{ hostvars[active].ip_suffix }}
+{% endif %}
+/ vrf untrusted_{{ vrf.id }} interface vxlan sync_{{ vrf.id }} vni {{ vrf.id }}
+/ vrf untrusted_{{ vrf.id }} interface vxlan sync_{{ vrf.id }} local 10.10.{{ 10 * vrf.id }}.{{ ip_suffix }}
+/ vrf untrusted_{{ vrf.id }} interface vxlan sync_{{ vrf.id }} ttl 128
+/ vrf untrusted_{{ vrf.id }} interface vxlan sync_{{ vrf.id }} mtu 1440
+/ vrf untrusted_{{ vrf.id }} interface loopback loopback_ipsec ipv4 address {{ipsec_tunnel_endpoint }}/32
+/ vrf untrusted_{{ vrf.id }} interface loopback loopback_ha ipv4 address 10.10.{{ 10 * vrf.id }}.{{ ip_suffix }}/32
+/ vrf untrusted_{{ vrf.id }} interface vlan untrust_{{ switches.switch1.name }}_{{ vrf.id }} ipv4 address 10.192.{{ 10 * vrf.id }}.{{ ip_suffix }}/24
+/ vrf untrusted_{{ vrf.id }} interface vlan untrust_{{ switches.switch1.name }}_{{ vrf.id }} vlan-id {{ 300+10*vrf.id }}
+/ vrf untrusted_{{ vrf.id }} interface vlan untrust_{{ switches.switch1.name }}_{{ vrf.id }} link-interface lag-{{ switches.switch1.name }}
+/ vrf untrusted_{{ vrf.id }} interface vlan untrust_{{ switches.switch1.name }}_{{ vrf.id }} link-vrf data
+/ vrf untrusted_{{ vrf.id }} interface vlan untrust_{{ switches.switch2.name }}_{{ vrf.id }} ipv4 address 10.194.{{ 10 * vrf.id }}.{{ ip_suffix }}/24
+/ vrf untrusted_{{ vrf.id }} interface vlan untrust_{{ switches.switch2.name }}_{{ vrf.id }} vlan-id {{ 300+10*vrf.id }}
+/ vrf untrusted_{{ vrf.id }} interface vlan untrust_{{ switches.switch2.name }}_{{ vrf.id }} link-interface lag-{{ switches.switch2.name }}
+/ vrf untrusted_{{ vrf.id }} interface vlan untrust_{{ switches.switch2.name }}_{{ vrf.id }} link-vrf data
+/ vrf untrusted_{{ vrf.id }} interface vrrp ike_control_{{ vrf.id }} version 3
+/ vrf untrusted_{{ vrf.id }} interface vrrp ike_control_{{ vrf.id }} track-link-interface false
+/ vrf untrusted_{{ vrf.id }} interface vrrp ike_control_{{ vrf.id }} link-interface sync_{{ vrf.id }}
+/ vrf untrusted_{{ vrf.id }} interface vrrp ike_control_{{ vrf.id }} use-vmac false
+/ vrf untrusted_{{ vrf.id }} interface vrrp ike_control_{{ vrf.id }} vrid {{ vrf.id }}
+{% if is_active %}
+/ vrf untrusted_{{ vrf.id }} interface vrrp ike_control_{{ vrf.id }} priority 200
+{% endif %}
+/ vrf untrusted_{{ vrf.id }} interface vrrp ike_control_{{ vrf.id }} preempt-delay 20
+/ vrf untrusted_{{ vrf.id }} interface vrrp ike_control_{{ vrf.id }} advertisement-interval 100
+/ vrf untrusted_{{ vrf.id }} interface vrrp ike_control_{{ vrf.id }} track healthcheck_vrrp_trusted
+/ vrf untrusted_{{ vrf.id }} interface vrrp ike_control_{{ vrf.id }} track healthcheck_vrrp_untrusted_{{ vrf.id }}
+/ vrf untrusted_{{ vrf.id }} interface vrrp ike_control_{{ vrf.id }} virtual-address 10.192.{{ 10 * vrf.id }}.{{ vrrp_ip_suffix }}/32 interface untrust_{{ switches.switch1.name }}_{{ vrf.id }} no-track true
+/ vrf untrusted_{{ vrf.id }} interface vrrp ike_control_{{ vrf.id }} virtual-address 10.194.{{ 10 * vrf.id }}.{{ vrrp_ip_suffix }}/32 interface untrust_{{ switches.switch2.name }}_{{ vrf.id }} no-track true
+/ vrf untrusted_{{ vrf.id }} interface vrrp ike_control_{{ vrf.id }} notify-ha-group ha_ipsec_{{ vrf.id }}
+/ vrf main kpi telegraf metrics monitored-interface vrf untrusted_{{ vrf.id }} name untrust_{{ switches.switch1.name }}_{{ vrf.id }}
+/ vrf main kpi telegraf metrics monitored-interface vrf untrusted_{{ vrf.id }} name untrust_{{ switches.switch2.name }}_{{ vrf.id }}
+/ vrf untrusted_{{ vrf.id }} routing bgp as 65111
+/ vrf untrusted_{{ vrf.id }} routing bgp router-id 10.10.{{ 10 * vrf.id }}.{{ ip_suffix }}
+/ vrf untrusted_{{ vrf.id }} routing bgp ebgp-requires-policy false
+/ vrf untrusted_{{ vrf.id }} routing bgp address-family ipv4-unicast redistribute connected route-map segw-to-access
+/ vrf untrusted_{{ vrf.id }} routing bgp neighbor 10.192.{{ 10 * vrf.id }}.1 remote-as 65222
+/ vrf untrusted_{{ vrf.id }} routing bgp neighbor 10.192.{{ 10 * vrf.id }}.1 timers connect-retry 1
+/ vrf untrusted_{{ vrf.id }} routing bgp neighbor 10.192.{{ 10 * vrf.id }}.1 address-family ipv4-unicast allowas-in origin
+/ vrf untrusted_{{ vrf.id }} routing bgp neighbor 10.192.{{ 10 * vrf.id }}.1 address-family ipv4-unicast route-map out route-map-name untrusted-out-{{ switches.switch1.name }}-{{ vrf.id }}
+/ vrf untrusted_{{ vrf.id }} routing bgp neighbor 10.192.{{ 10 * vrf.id }}.1 track bfd
+/ vrf untrusted_{{ vrf.id }} routing bgp neighbor 10.194.{{ 10 * vrf.id }}.1 remote-as 65222
+/ vrf untrusted_{{ vrf.id }} routing bgp neighbor 10.194.{{ 10 * vrf.id }}.1 timers connect-retry 1
+/ vrf untrusted_{{ vrf.id }} routing bgp neighbor 10.194.{{ 10 * vrf.id }}.1 address-family ipv4-unicast allowas-in origin
+/ vrf untrusted_{{ vrf.id }} routing bgp neighbor 10.194.{{ 10 * vrf.id }}.1 address-family ipv4-unicast route-map out route-map-name untrusted-out-{{ switches.switch2.name }}-{{ vrf.id }}
+/ vrf untrusted_{{ vrf.id }} routing bgp neighbor 10.194.{{ 10 * vrf.id }}.1 track bfd
+/ vrf untrusted_{{ vrf.id }} vrrp vrrp-startup-delay 30
+/ vrf untrusted_{{ vrf.id }} vrrp drop-traffic-on-backup false
+{% else %}
+/ vrf untrusted_{{ vrf.id }}
+{% endif %}
+{%- endfor %}
+
+{%- for vrf in vrfs %}
+{%- set is_active = states[state].vrfs[vrf.id].active == hostname %}
+{%- set is_backup = states[state].vrfs[vrf.id].backup == hostname %}
+{%- set active = 'clab-6wind-mobile-segw-' + states[state].vrfs[vrf.id].active %}
+{%- set backup = 'clab-6wind-mobile-segw-' + states[state].vrfs[vrf.id].backup %}
+
+{% if is_active or is_backup %}
+/ vrf trusted interface gre gre-trusted-{{ vrf.id }} local 10.11.0.{{ ip_suffix }}
+{% if is_active %}
+/ vrf trusted interface gre gre-trusted-{{ vrf.id }} remote 10.11.0.{{ hostvars[backup].ip_suffix }}
+{% else %}
+/ vrf trusted interface gre gre-trusted-{{ vrf.id }} remote 10.11.0.{{ hostvars[active].ip_suffix }}
+{% endif %}
+/ vrf trusted interface gre gre-trusted-{{ vrf.id }} key both {{ vrf.id }}
+{% endif %}
+/ vrf trusted interface svti svti-trusted-{{ vrf.id }} mtu {{mtu }}
+/ vrf trusted interface svti svti-trusted-{{ vrf.id }} svti-id {{ vrf.id }}
+/ vrf trusted interface svti svti-trusted-{{ vrf.id }} link-vrf untrusted_{{ vrf.id }}
+{%- endfor %}
+
+/ vrf trusted interface loopback lo-gre-trusted ipv4 address 10.11.0.{{ ip_suffix }}/32
+/ vrf trusted interface vlan trusted_{{ switches.switch1.name }} ipv4 address 10.193.0.{{ ip_suffix }}/24
+/ vrf trusted interface vlan trusted_{{ switches.switch1.name }} vlan-id 400
+/ vrf trusted interface vlan trusted_{{ switches.switch1.name }} link-interface lag-{{ switches.switch1.name }}
+/ vrf trusted interface vlan trusted_{{ switches.switch1.name }} link-vrf data
+/ vrf trusted interface vlan trusted_{{ switches.switch2.name }} ipv4 address 10.195.0.{{ ip_suffix }}/24
+/ vrf trusted interface vlan trusted_{{ switches.switch2.name }} vlan-id 400
+/ vrf trusted interface vlan trusted_{{ switches.switch2.name }} link-interface lag-{{ switches.switch2.name }}
+/ vrf trusted interface vlan trusted_{{ switches.switch2.name }} link-vrf data
+/ vrf main kpi telegraf metrics monitored-interface vrf trusted name trusted_{{ switches.switch1.name }}
+/ vrf main kpi telegraf metrics monitored-interface vrf trusted name trusted_{{ switches.switch2.name }}
+/ vrf trusted routing bgp as 65111
+/ vrf trusted routing bgp router-id 10.11.0.{{ ip_suffix }}
+/ vrf trusted routing bgp ebgp-requires-policy false
+/ vrf trusted routing bgp address-family ipv4-unicast redistribute kernel
+/ vrf trusted routing bgp address-family ipv4-unicast redistribute connected route-map connected-to-core
+/ vrf trusted routing bgp neighbor-group dc-gws remote-as 65222
+/ vrf trusted routing bgp neighbor-group dc-gws timers connect-retry 1
+/ vrf trusted routing bgp neighbor-group dc-gws address-family ipv4-unicast allowas-in origin
+/ vrf trusted routing bgp neighbor-group dc-gws address-family ipv4-unicast route-map out route-map-name trusted-out
+/ vrf trusted routing bgp neighbor-group dc-gws address-family ipv4-unicast soft-reconfiguration-inbound true
+/ vrf trusted routing bgp neighbor-group dc-gws track bfd
+/ vrf trusted routing bgp neighbor 10.193.0.1 neighbor-group dc-gws
+/ vrf trusted routing bgp neighbor 10.195.0.1 neighbor-group dc-gws
+
+{%- for vrf in vrfs %}
+{%- set is_active = states[state].vrfs[vrf.id].active == hostname %}
+{%- set is_backup = states[state].vrfs[vrf.id].backup == hostname %}
+{%- set active = 'clab-6wind-mobile-segw-' + states[state].vrfs[vrf.id].active %}
+{%- set backup = 'clab-6wind-mobile-segw-' + states[state].vrfs[vrf.id].backup %}
+
+{% if is_active or is_backup %}
+/ ha group ha_ipsec_{{ vrf.id }}
+{% endif %}
+{%- endfor %}
+
+/ routing ipv4-prefix-list ran seq 10 address 7.0.0.0/8 policy permit le 32
+
+/ routing route-map segw-to-access seq 10 policy permit
+/ routing route-map segw-to-access seq 10 match interface loopback_ipsec
+/ routing route-map segw-to-access seq 20 policy permit
+/ routing route-map segw-to-access seq 20 match interface loopback_ha
+/ routing route-map segw-to-access seq 100 policy deny
+
+/ routing route-map trusted-out
+{%- for vrf in vrfs %}
+{%- set is_active = states[state].vrfs[vrf.id].active == hostname %}
+{%- set is_backup = states[state].vrfs[vrf.id].backup == hostname %}
+{%- set active = 'clab-6wind-mobile-segw-' + states[state].vrfs[vrf.id].active %}
+{%- set backup = 'clab-6wind-mobile-segw-' + states[state].vrfs[vrf.id].backup %}
+
+{% if is_active or is_backup %}
+/ routing route-map trusted-out seq {{ vrf.id }} policy permit
+/ routing route-map trusted-out seq {{ vrf.id }} match interface svti-trusted-{{ vrf.id }}
+{% if is_active %}
+/ routing route-map trusted-out seq {{ vrf.id }} match ha-group
+/ routing route-map trusted-out seq {{ vrf.id }} match ha-group name ha_ipsec_{{ vrf.id }}
+{% endif %}
+{% if is_active %}
+/ routing route-map trusted-out seq {{ vrf.id }} set metric 10
+{% else %}
+/ routing route-map trusted-out seq {{ vrf.id }} set metric 20
+/ routing route-map trusted-out seq {{ 100 + vrf.id }} policy permit
+/ routing route-map trusted-out seq {{ 100 + vrf.id }} match interface gre-trusted-{{ vrf.id }}
+/ routing route-map trusted-out seq {{ 100 + vrf.id }} set metric 20
+{% endif %}
+{% endif %}
+{%- endfor %}
+/ routing route-map trusted-out seq 999 policy permit
+/ routing route-map trusted-out seq 999 match interface lo-gre-trusted
+
+/ routing route-map connected-to-core seq 10 policy permit
+/ routing route-map connected-to-core seq 10 match interface lo-gre-trusted
+
+
+{%- for vrf in vrfs %}
+{%- set is_active = states[state].vrfs[vrf.id].active == hostname %}
+{%- set is_backup = states[state].vrfs[vrf.id].backup == hostname %}
+{%- set active = 'clab-6wind-mobile-segw-' + states[state].vrfs[vrf.id].active %}
+{%- set backup = 'clab-6wind-mobile-segw-' + states[state].vrfs[vrf.id].backup %}
+
+{% if is_active or is_backup %}
+/ routing route-map untrusted-out-{{ switches.switch1.name }}-{{ vrf.id }} seq 10 policy permit
+/ routing route-map untrusted-out-{{ switches.switch1.name }}-{{ vrf.id }} seq 10 match interface loopback_ipsec
+/ routing route-map untrusted-out-{{ switches.switch1.name }}-{{ vrf.id }} seq 10 set ip next-hop 10.192.{{ 10 * vrf.id}}.{{ vrrp_ip_suffix }}
+/ routing route-map untrusted-out-{{ switches.switch1.name }}-{{ vrf.id }} seq 20 policy permit
+/ routing route-map untrusted-out-{{ switches.switch1.name }}-{{ vrf.id }} seq 20 match interface loopback_ha
+/ routing route-map untrusted-out-{{ switches.switch2.name }}-{{ vrf.id }} seq 10 policy permit
+/ routing route-map untrusted-out-{{ switches.switch2.name }}-{{ vrf.id }} seq 10 match interface loopback_ipsec
+/ routing route-map untrusted-out-{{ switches.switch2.name }}-{{ vrf.id }} seq 10 set ip next-hop 10.194.{{ 10 * vrf.id}}.{{ vrrp_ip_suffix }}
+/ routing route-map untrusted-out-{{ switches.switch2.name }}-{{ vrf.id }} seq 20 policy permit
+/ routing route-map untrusted-out-{{ switches.switch2.name }}-{{ vrf.id }} seq 20 match interface loopback_ha
+{% endif %}
+{%- endfor %}
+
+/ pki
+/ pki ca-profile 6WIND_CA
+/ pki ca-profile 6WIND_CA cmp
+/ pki ca-profile 6WIND_CA cmp url http://clab-6wind-mobile-segw-pki:8080/ejbca/publicweb/cmp/client
+/ pki ca-profile 6WIND_CA cmp server-certificate CMP-6WIND
+/ pki revocation
+/ pki revocation crl
+
+/ system hostname {{ hostname }}
+{% for port in ports %}
+/ system fast-path virtual-port infrastructure {{ port.portid }}
+{% endfor %}
+/ system fast-path advanced machine-memory 1000
+/ system fast-path limits fp-max-vrf 8
+/ system fast-path limits ip4-max-addr 64000
+/ system fast-path limits ip4-max-route 128000
+/ system fast-path limits reass4-max-queue 128000
+/ system fast-path limits ipsec-max-sp 200000
+/ system fast-path limits ipsec-max-sa 200000
+/ system license online serial {{ serial }}
+/ system auth user admin role admin
+/ system auth user admin authorized-key "{{ ssh_key }}"
+
+{%- for vrf in vrfs %}
+{%- set is_active = states[state].vrfs[vrf.id].active == hostname %}
+{%- set is_backup = states[state].vrfs[vrf.id].backup == hostname %}
+{%- set active = 'clab-6wind-mobile-segw-' + states[state].vrfs[vrf.id].active %}
+{%- set backup = 'clab-6wind-mobile-segw-' + states[state].vrfs[vrf.id].backup %}
+
+{% if is_active or is_backup %}
+/ tracker icmp healthcheck_vrrp_untrusted_{{ vrf.id }} address 99.99.99.99 vrf untrusted_{{ vrf.id }} source 10.10.{{ 10*vrf.id }}.{{ ip_suffix }} threshold 3 total 5 timeout 500
+{% endif %}
+{%- endfor %}
+/ tracker icmp healthcheck_vrrp_trusted address 99.99.99.99 vrf trusted source 10.11.0.{{ ip_suffix }} threshold 3 total 5 timeout 500
+
+commit
+
+exit
+
+cliconfig
+auto-validation true
+save force
+exit
